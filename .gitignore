@@ -17,3 +17,5 @@ web/test-results/
 web/playwright-report/
 
 *.tsbuildinfo
+
+.install/

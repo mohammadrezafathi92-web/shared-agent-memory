@@ -6,7 +6,19 @@ Implemented: Persian/English RTL/LTR dashboard, project/session management, sour
 
 Not implemented yet: automatic extraction/embeddings, worker queue, OAuth/cloud ChatGPT integration, Hermes/OpenCode/Desktop adapters, personal visibility tiers, automatic conflict detection, retention/export/deletion workflows, and backup automation. The vector extension is enabled if the database image supplies it, but no vector search is performed. No external model API or GPU is required for this milestone.
 
-## Start on Ubuntu with Docker Compose
+## Install with one command
+
+Run in a terminal on your Ubuntu server:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/mohammadrezafathi92-web/shared-agent-memory/main/install.sh | bash
+```
+
+The Persian/English wizard asks for the install directory, owner, workspace, project, port and local/HTTPS access. It can install missing prerequisites, builds the services, migrates PostgreSQL, creates the first account/token and verifies the dashboard. Interrupted installs resume with the same credentials and data. [Full installer guide](docs/installation.md) covers DNS/HTTPS, mirrors, private credentials, unattended answers and service management.
+
+Already cloned? Run `bash install.sh`. Use a fresh directory: existing manual deployments are not overwritten. This is a developer preview; the installer does not add missing product features or production certification.
+
+## Manual setup with Docker Compose
 
 Requires Docker Engine with Compose v2, Python 3 for configuration generation, and access to package/container registries. Clone the public repository, then run:
 

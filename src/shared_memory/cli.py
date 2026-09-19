@@ -52,6 +52,7 @@ def main():
         description="Shared memory administration (requires database access)"
     )
     sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("bootstrap", help="Installer provisioning; JSON on stdin, no secrets on stdout")
     init = sub.add_parser("init")
     init.add_argument("--workspace", required=True)
     init.add_argument("--email", required=True)
@@ -89,7 +90,16 @@ def main():
         )
         return
     with psycopg.connect(Settings().database_url, row_factory=dict_row) as db:
-        if args.command == "init":
+        if args.command == "bootstrap":
+            from .bootstrap import provision
+
+            try:
+                result = provision(db, json.loads(sys.stdin.read(16384)))
+            except (ValueError, TypeError):
+                raise SystemExit(
+                    "Bootstrap input or existing installation identity is invalid; no changes committed."
+                ) from None
+        elif args.command == "init":
             result = initialize(db, args.workspace, args.email, args.project)
         elif args.command == "create-project":
             user = db.execute(

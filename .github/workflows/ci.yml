@@ -30,6 +30,7 @@ jobs:
       - run: npm ci --prefix web
       - run: npm run build --prefix web
       - run: uv sync --frozen
+      - run: bash -n install.sh scripts/install-docker.sh
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pytest -q
@@ -50,11 +51,5 @@ jobs:
           npx playwright install --with-deps chromium
           npm run test:e2e
       - run: docker build -t shared-agent-memory:test .
-      - name: Compose smoke test
-        run: |
-          python3 scripts/configure.py
-          docker compose up --build -d --wait
-          curl --fail http://127.0.0.1:8765/health
-          curl --fail http://127.0.0.1:8765/
-      - if: always()
-        run: docker compose down
+      - name: Interactive installer and replay smoke test
+        run: uv run python scripts/smoke_install.py --interactive
