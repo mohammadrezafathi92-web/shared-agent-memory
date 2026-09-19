@@ -1,12 +1,42 @@
 # Claude Code and Codex adapters
 
-Status: HTTP/MCP transport and hook subprocesses tested with synthetic lifecycle payloads. Actual installed host versions have **not** been certified. No host configuration is changed by setup or tests.
+Status: HTTP/MCP transport and hook subprocesses tested with synthetic lifecycle payloads. Actual installed host versions have **not** been certified. No host configuration is changed by setup or tests; `connect-agents` below changes it, but only when you run that command yourself.
 
 ## MCP configuration
 
 Issue a different token for each host and make it available as `MEMORY_TOKEN` in that host's process environment. Claude Code: merge `adapters/claude-code/mcp.example.json` into your project's `.mcp.json`. Codex: merge `adapters/codex/mcp.example.toml` into the intended `config.toml`. Replace the loopback URL for a remote deployment and use HTTPS. The bearer token is a project-memory credential, not an Anthropic/OpenAI API key.
 
 The templates follow [Claude Code MCP configuration](https://code.claude.com/docs/en/mcp) and [Codex MCP configuration](https://learn.chatgpt.com/docs/extend/mcp?surface=cli), checked 2026-09-19. A GUI-launched host may not inherit your shell environment; use its supported environment setup. Do not paste a real token into a tracked configuration file.
+
+## Automatic wiring (`connect-agents`)
+
+Merging `adapters/*/mcp.example.*` by hand, above, still works. `connect-agents` is a
+separate, on-demand admin command that does the same merge for you, once you choose to
+run it:
+
+```sh
+uv run shared-memory connect-agents --workspace-id WORKSPACE_UUID --email owner@example.test
+```
+
+It looks for `claude` and `codex` on `PATH`, issues one fresh token per detected host
+(`issue-token` under the hood), and merges an entry for each into that host's own
+configuration file: Claude Code's `.mcp.json` in the current directory, Codex's
+`~/.codex/config.toml`. Nothing is overwritten: an absent entry is created (after an
+interactive yes/no, unless `--yes` is given), an identical existing entry is left alone,
+and a *different* existing entry is skipped with a message rather than replaced —
+matching how `hook-config` and the installer's `runtime.env` already behave. The
+configuration files never contain a raw token, only a reference to a per-host
+environment variable (`MEMORY_TOKEN_CLAUDE_CODE`, `MEMORY_TOKEN_CODEX`); the command
+prints the corresponding `export` lines (or, with `--env-file PATH`, writes them to a
+private 0600 file instead of stdout) so you can put the real value where the host
+process will read it.
+
+Useful flags: `--host claude-code|codex` (repeatable; defaults to whatever is detected),
+`--url` for a non-default server address, `--token TOKEN` to supply an existing token
+instead of issuing one (requires exactly one `--host`, no database needed), `--mcp-json`
+/ `--codex-toml` to target a config file elsewhere, and `--yes` for non-interactive runs
+(scripts, CI). As with the manual path above, a GUI-launched host may not inherit an
+`export` made in your shell; use that host's supported environment setup.
 
 ## Optional lifecycle hooks
 

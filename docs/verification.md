@@ -84,3 +84,23 @@ override (`.install/lan.json`) are covered by local unit tests
 `test_installer_lan_mode_publishes_on_the_lan_address`); an actual container install in `lan` mode,
 reached from a second device, was **not** re-run through `scripts/smoke_install.py` in this change
 — only exercised manually once against a real server during development.
+
+## Automatic agent wiring (`connect-agents`)
+
+Added `shared-memory connect-agents`, an explicit, on-demand CLI command (not run by setup or
+tests) that detects `claude`/`codex` on `PATH` and merges a `shared-memory` MCP entry into each
+detected host's own configuration file — Claude Code's `.mcp.json`, Codex's `~/.codex/config.toml`
+— referencing a per-host bearer token only through an environment variable name, never a raw
+token in the file. The merge is create-if-absent, no-op-if-identical, skip-with-a-message if a
+different entry already exists; nothing is ever silently overwritten, matching `hook-config` and
+the installer's `runtime.env`. The token-supply path (`--workspace-id`/`--email`, issuing a fresh
+token per host) and the bring-your-own-token path (`--token`, no database needed) are separate
+code paths in `cli.py`.
+
+Verified locally with **18 new unit/subprocess tests** covering: detection from a faked `PATH`;
+create/no-op/skip/decline behavior for both `.mcp.json` and `config.toml`, including malformed
+existing files; that a raw token is never written into either configuration file; and the
+`connect-agents` subcommand itself end to end in `--token` mode (needs no database). What was
+**not** re-run: an actual installed Claude Code or Codex CLI picking up the merged configuration
+and connecting — that needs a real host binary and a live server, neither available in this
+environment.

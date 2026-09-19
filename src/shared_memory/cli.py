@@ -10,6 +10,7 @@ import psycopg
 from psycopg.rows import dict_row
 
 from .config import Settings
+from .connect_agents import ENV_VAR_NAMES, SUPPORTED_HOSTS, connect, detect_hosts, private_write
 
 SCOPES = ["memory:read", "memory:write", "session:write"]
 
@@ -74,6 +75,35 @@ def main():
     revoke.add_argument("--connection-id", required=True)
     hook = sub.add_parser("hook-config")
     hook.add_argument("--host", choices=["claude-code", "codex"], required=True)
+    connect_agents_cmd = sub.add_parser(
+        "connect-agents",
+        help="Detect agent CLIs installed on this machine and wire them to this server",
+    )
+    connect_agents_cmd.add_argument("--workspace-id")
+    connect_agents_cmd.add_argument("--email")
+    connect_agents_cmd.add_argument(
+        "--token", help="Use this token as-is instead of issuing one (requires exactly one --host)"
+    )
+    connect_agents_cmd.add_argument(
+        "--host",
+        choices=SUPPORTED_HOSTS,
+        action="append",
+        help="Repeatable; defaults to every supported host detected on PATH",
+    )
+    connect_agents_cmd.add_argument("--url", default="http://127.0.0.1:8765")
+    connect_agents_cmd.add_argument(
+        "--yes", action="store_true", help="Write configuration without an interactive confirmation"
+    )
+    connect_agents_cmd.add_argument(
+        "--env-file",
+        help="Write 'export VAR=token' lines to this private file instead of stdout",
+    )
+    connect_agents_cmd.add_argument(
+        "--mcp-json", help="Override the .mcp.json path (default: ./.mcp.json)"
+    )
+    connect_agents_cmd.add_argument(
+        "--codex-toml", help="Override the Codex config.toml path (default: ~/.codex/config.toml)"
+    )
     args = parser.parse_args()
     if args.command == "hook-config":
         cmd = shlex.join([sys.executable, "-m", "shared_memory.hook", "--host", args.host])
@@ -88,6 +118,52 @@ def main():
                 indent=2,
             )
         )
+        return
+    if args.command == "connect-agents":
+        hosts = args.host or detect_hosts()
+        if not hosts:
+            raise SystemExit(
+                "No supported agent CLI found on PATH (claude, codex). "
+                "Pass --host to configure one anyway."
+            )
+        if args.token is not None:
+            if len(hosts) != 1:
+                parser.error("--token requires exactly one --host")
+            supplied = args.token
+
+            def token_provider(host, _token=supplied):
+                return _token, ENV_VAR_NAMES[host]
+        else:
+            if not (args.workspace_id and args.email):
+                parser.error(
+                    "Provide --token (with a single --host), or --workspace-id and --email"
+                )
+            with psycopg.connect(Settings().database_url, row_factory=dict_row) as db:
+                issued = {
+                    host: issue_token(db, args.workspace_id, args.email, host)["token"]
+                    for host in hosts
+                }
+
+            def token_provider(host, _issued=issued):
+                return _issued[host], ENV_VAR_NAMES[host]
+
+        def ask(prompt):
+            if args.yes:
+                return True
+            return input(f"{prompt} [y/N]: ").strip().lower() in ("y", "yes")
+
+        outcome = connect(
+            hosts,
+            args.url,
+            token_provider,
+            ask,
+            mcp_json_path=args.mcp_json,
+            codex_toml_path=args.codex_toml,
+        )
+        if args.env_file:
+            private_write(args.env_file, "\n".join(outcome["exports"]) + "\n")
+            outcome["exports"] = [f"written to {args.env_file}"]
+        print(json.dumps(outcome, indent=2))
         return
     with psycopg.connect(Settings().database_url, row_factory=dict_row) as db:
         if args.command == "bootstrap":

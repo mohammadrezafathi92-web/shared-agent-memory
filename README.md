@@ -65,7 +65,7 @@ The UI supports sessions and their event timeline, manual decisions/checkpoints,
 
 ## Connect hosts
 
-See [the adapter guide](docs/adapters.md). Sample MCP configs live in `adapters/claude-code/` and `adapters/codex/`. They do not alter your installed hosts. The generated hook configurations must be merged with existing settings, never overwrite an existing hooks file.
+See [the adapter guide](docs/adapters.md). Sample MCP configs live in `adapters/claude-code/` and `adapters/codex/`. They do not alter your installed hosts. The generated hook configurations must be merged with existing settings, never overwrite an existing hooks file. To do the MCP config merge for you, run `uv run shared-memory connect-agents --workspace-id WORKSPACE_UUID --email owner@example.com`: it detects `claude`/`codex` on `PATH`, issues one token per host, and writes an entry only when one is absent or identical, never over a differing one.
 
 All MCP tools use an argument named `request`, validated by the same schema as REST. Example `session_start`:
 
