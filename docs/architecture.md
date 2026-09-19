@@ -1,4 +1,4 @@
-# M0/M1 architecture and contract decisions
+# Architecture and contract decisions (0.2)
 
 This is a deliberately small vertical slice of the broader Persian implementation specification. A single Python package owns authorization, transactions and domain behavior. REST and the official MCP SDK invoke the same service. PostgreSQL is authoritative; no model calls are made.
 
@@ -12,10 +12,12 @@ Memory retains explicit agent-assertion provenance. Evidence IDs refer to events
 
 Relations point **from the newer/current session to its predecessor**. Continues/branches_from must be acyclic, including parent_session_id edges. References can be cyclic. Both endpoints must be in the same authorized project and the caller must own the source session.
 
-`contracts.json` contains the implemented input schemas. MCP wraps each schema in a `request` argument; REST accepts the inner object. The draft specification's batch API, pagination, as-of queries, generic facts, resource subscriptions, worker jobs, vector index and administrative web API remain future work. `/api/v1/projects` and `/api/v1/events/{id}` provide scoped inspection. Error responses avoid reflecting invalid request bodies; authentication fails before tool dispatch.
+`contracts.json` contains the implemented input schemas. MCP wraps each schema in a `request` argument; REST accepts the inner object. The draft specification's batch API, general memory pagination, as-of queries, generic facts, resource subscriptions, worker jobs, vector index and full user/token administration in the web UI remain future work. The dashboard adds `/api/v1/me`, project creation/overview, paginated sessions and events, session lineage and own-connection inspection. All data routes require a bearer token and the shared authorization checks. `/` and `/assets/*` serve only the static application shell. Error responses avoid reflecting invalid request bodies; authentication fails before tool dispatch.
 
 The Python SDK remains on its pinned v1 maintenance line for this milestone. A transport integration test negotiates MCP and uses two independent credentials over HTTP. Actual host integration needs a versioned certification run, not just a protocol-compatible mock identity.
 
 No silent extraction is scheduled: `event_append` reports `stored`, and search/context report `semantic_index: not_enabled`. This prevents queued work that appears indexed or an unsupported semantic claim. The pgvector extension is enabled by migration when available, but the current core works on stock PostgreSQL too.
 
 Local adapter spooling is separate from a future server-side extraction queue. Events use stable spool IDs across network retries. Hooks capture metadata by default, selected bounded content by opt-in, never hidden reasoning or arbitrary transcript files. Logs/errors avoid echoing private payloads; secret redaction is best effort, not a guarantee.
+
+The bilingual React UI is built by Vite in a Node Docker build stage and served by FastAPI in the Python runtime image. Tokens stay in component memory; only language is stored in localStorage. No third-party fonts or scripts are fetched at runtime.
