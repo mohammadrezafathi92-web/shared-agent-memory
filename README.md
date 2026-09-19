@@ -1,14 +1,19 @@
-# Shared Agent Memory (working name)
+# Shared Agent Memory
 
-Self-hosted, source-linked memory across agent sessions. **Early M0/M1 implementation**, not the finished product. [راهنمای فارسی](docs/README.fa.md).
+Self-hosted, source-linked memory across agent sessions. **Early 0.2 developer preview** with a bilingual web dashboard. [راهنمای فارسی](docs/README.fa.md).
 
-Implemented: PostgreSQL persistence and migrations; project membership and revocable per-connection bearer tokens; eight tools over official MCP Streamable HTTP and REST; explicit decisions and checkpoints; safe replay; explicit decision revisions; keyword retrieval with Persian normalization; source inspection; CLI administration; opt-in Claude Code/Codex lifecycle adapters with a durable offline spool.
+Implemented: Persian/English RTL/LTR dashboard, project/session management, source inspection, session links and context preview; PostgreSQL persistence and migrations; project membership and revocable per-connection bearer tokens; eight tools over official MCP Streamable HTTP and REST; explicit decisions and checkpoints; safe replay; explicit decision revisions; keyword retrieval with Persian normalization; source inspection; CLI administration; opt-in Claude Code/Codex lifecycle adapters with a durable offline spool.
 
-Not implemented yet: graphical dashboard, automatic extraction/embeddings, worker queue, OAuth/cloud ChatGPT integration, Hermes/OpenCode/Desktop adapters, personal visibility tiers, automatic conflict detection, retention/export/deletion workflows, and backup automation. The vector extension is enabled if the database image supplies it, but no vector search is performed. No external model API or GPU is required for this milestone.
+Not implemented yet: automatic extraction/embeddings, worker queue, OAuth/cloud ChatGPT integration, Hermes/OpenCode/Desktop adapters, personal visibility tiers, automatic conflict detection, retention/export/deletion workflows, and backup automation. The vector extension is enabled if the database image supplies it, but no vector search is performed. No external model API or GPU is required for this milestone.
 
 ## Start on Ubuntu with Docker Compose
 
-Requires Docker Engine with Compose v2, Python 3 for configuration generation, and access to package/container registries. Run from this repository directory:
+Requires Docker Engine with Compose v2, Python 3 for configuration generation, and access to package/container registries. Clone the public repository, then run:
+
+```sh
+git clone https://github.com/mohammadrezafathi92-web/shared-agent-memory.git
+cd shared-agent-memory
+```
 
 ```sh
 python3 scripts/configure.py
@@ -30,7 +35,21 @@ The API binds to loopback on port 8765; the database is not published. For LAN d
 
 Compose defaults to `pgvector/pgvector:pg17`. For the keyword-only milestone, stock PostgreSQL 16+ also works via `MEMORY_DB_IMAGE`. **Never change the PostgreSQL major version against an existing data volume**; use dump/restore into a fresh volume. `docker compose down` preserves the volume; adding `-v` deletes it.
 
-If Docker Hub is unreachable, `MEMORY_PYTHON_IMAGE=public.ecr.aws/docker/library/python:3.12-slim` selects the Docker Official Image mirror for the application build. This does not mirror the pgvector database image; a stock database fallback only covers this keyword-only milestone. See verification notes for the exact tested combination.
+If Docker Hub is unreachable, `MEMORY_PYTHON_IMAGE=public.ecr.aws/docker/library/python:3.12-slim` selects the Docker Official Image mirror for the application build. `MEMORY_NODE_IMAGE=public.ecr.aws/docker/library/node:22-slim` similarly selects the Node build-stage mirror. These do not mirror the pgvector database image; a stock database fallback only covers this keyword-only milestone. See verification notes for the exact tested combination.
+
+## Open the dashboard
+
+Docker builds the React interface and serves it alongside the API at **http://127.0.0.1:8765/**. Generate a dedicated dashboard connection:
+
+```sh
+docker compose exec api shared-memory issue-token --workspace-id WORKSPACE_UUID --email owner@example.com --host dashboard
+```
+
+Paste that token into the login page. Tokens stay in tab memory; refresh or disconnect clears the login. Only the language preference is persisted in browser storage. Persian is the default; use **EN / فا** to switch. The dashboard shows only authorized projects and your own connection records. Existing project owners can create projects; users and token issuance/revocation are administered with the CLI.
+
+The UI supports sessions and their event timeline, manual decisions/checkpoints, source inspection, keyword search, context preview, and a linked-session map (latest 100 sessions). Continuing another connection's session creates a new session with a parent link. The session detail shows the latest 100 memory versions; use memory search/get for older records.
+
+![Dashboard with synthetic sample data](docs/images/dashboard-fa.png)
 
 ## Connect hosts
 
@@ -65,6 +84,8 @@ Install [uv](https://docs.astral.sh/uv/), then:
 ```sh
 python3 scripts/configure.py  # skip if .env already exists
 uv sync --frozen
+npm ci --prefix web  # Node.js 22.12+
+npm run build --prefix web
 docker compose -f compose.yaml -f compose.dev.yaml up -d db
 uv run alembic upgrade head
 uv run uvicorn shared_memory.app:app --host 127.0.0.1 --port 8765
@@ -82,8 +103,20 @@ uv run pytest -q
 
 Integration tests cover cross-host handoff, a live MCP protocol handshake, source retrieval, project/workspace isolation, viewer permissions, revocation, persistence after app restart, replay collisions and concurrency, decision version races, cyclic links, Persian keyword normalization, payload limits, redaction, offline spool replay, and hook subprocess output.
 
+Browser checks use isolated synthetic data and a running API. Never run these against production. The seed creates a new workspace and a private credential file, refusing to overwrite existing files:
+
+```sh
+mkdir -p work
+uv run python scripts/seed_dashboard.py --output work/dashboard.credentials.json
+cd web
+npx playwright install chromium
+MEMORY_E2E_CREDENTIALS="$PWD/../work/dashboard.credentials.json" npm run test:e2e
+```
+
+The API and seed must use the same `MEMORY_DATABASE_URL`. Revoke the exported dashboard connection after testing and remove the private file. The seed revokes its two synthetic host credentials automatically. For UI development, `npm run dev --prefix web` proxies requests to the API on port 8765.
+
 ## Repository and release status
 
-`src/shared_memory/` is a modular package shared by API, CLI and adapters. Keeping this first vertical slice in one package is a deliberate simplification of the planned monorepo; future web and worker applications will be separated when implemented. `migrations/` contains the frozen schema, `tests/` the integration suite, `docs/` operational notes, and `.github/workflows/` a proposed CI workflow. The SDK is intentionally pinned to the supported v1 maintenance line (`mcp<2`) with a lockfile; migration to v2 is a separate compatibility change.
+`src/shared_memory/` is a modular package shared by API, CLI and adapters. Keeping this first vertical slice in one package is a deliberate simplification of the planned monorepo; the React app lives in `web/`; a separate extraction worker remains planned. Static serving keeps the dashboard and API on one origin without another runtime service. `migrations/` contains the frozen schema, `tests/` the integration suite, `docs/` operational notes, and `.github/workflows/` the CI workflow. The SDK is intentionally pinned to the supported v1 maintenance line (`mcp<2`) with a lockfile; migration to v2 is a separate compatibility change.
 
-See [verification status](docs/verification.md) for what was actually run. The project has not been published to GitHub, installed into real host settings, or deployed on the organization's server. Apache-2.0 applies to project code; dependencies retain their own licenses.
+See [verification status](docs/verification.md) for what was actually run. Published at [GitHub](https://github.com/mohammadrezafathi92-web/shared-agent-memory). Real host settings and the organization's server have not been changed. Apache-2.0 applies to project code; dependencies retain their own licenses.

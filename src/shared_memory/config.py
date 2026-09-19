@@ -9,3 +9,4 @@ class Settings(BaseSettings):
         default_factory=lambda: ["127.0.0.1:*", "localhost:*", "testserver"]
     )
     max_body_bytes: int = 1_048_576
+    web_dist: str = "web/dist"

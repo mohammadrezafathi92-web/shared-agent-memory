@@ -1,12 +1,15 @@
 import contextvars
 import json
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import ValidationError
@@ -24,6 +27,7 @@ from .contracts import (
     SessionLink,
     SessionStart,
 )
+from .dashboard import dashboard_router
 from .service import DomainError, Store
 
 current_token = contextvars.ContextVar("memory_token", default="")
@@ -34,7 +38,11 @@ class BoundaryMiddleware:
         self.app, self.store, self.settings = app, store, settings
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] != "http" or scope["path"] == "/health":
+        if (
+            scope["type"] != "http"
+            or scope["path"] in ("/health", "/")
+            or scope["path"].startswith("/assets/")
+        ):
             return await self.app(scope, receive, send)
         request_id = str(uuid4())
         headers = dict(scope["headers"])
@@ -187,7 +195,7 @@ def create_app(settings=None):
         finally:
             await run_in_threadpool(store.close)
 
-    api = FastAPI(title="Shared Agent Memory", version="0.1.0", lifespan=lifespan)
+    api = FastAPI(title="Shared Agent Memory", version="0.2.0", lifespan=lifespan)
     api.state.store = store
     api.state.mcp = mcp
     api.add_middleware(BoundaryMiddleware, store=store, settings=settings)
@@ -196,6 +204,7 @@ def create_app(settings=None):
     async def domain_error(request, exc):
         return JSONResponse({"error": {"code": exc.code, "retryable": False}}, exc.status)
 
+    @api.exception_handler(RequestValidationError)
     @api.exception_handler(ValidationError)
     async def validation_error(request, exc):
         # Do not echo the supplied input (it may contain private content).
@@ -215,7 +224,7 @@ def create_app(settings=None):
         try:
             with store.pool.connection() as db:
                 db.execute("SELECT version_num FROM alembic_version").fetchone()
-            return {"status": "ok", "version": "0.1.0", "search_mode": "keyword"}
+            return {"status": "ok", "version": "0.2.0", "search_mode": "keyword"}
         except Exception:
             return JSONResponse({"status": "unavailable"}, 503)
 
@@ -235,7 +244,7 @@ def create_app(settings=None):
             if "memory:read" not in actor["scopes"]:
                 raise DomainError("FORBIDDEN", 403)
             rows = db.execute(
-                """SELECT p.id,p.name FROM projects p JOIN project_members m ON m.project_id=p.id
+                """SELECT p.id,p.name,m.role FROM projects p JOIN project_members m ON m.project_id=p.id
                 WHERE m.user_id=%s AND m.workspace_id=%s ORDER BY p.name""",
                 (actor["user_id"], actor["workspace_id"]),
             ).fetchall()
@@ -256,6 +265,25 @@ def create_app(settings=None):
             store.authorize(db, actor, row["project_id"])
             row.pop("content_hash")
             return jsonable_encoder(row)
+
+    api.include_router(dashboard_router(store, current_token.get))
+    web = Path(settings.web_dist)
+    if web.is_dir():
+
+        @api.get("/", include_in_schema=False)
+        def dashboard():
+            return FileResponse(
+                web / "index.html",
+                headers={
+                    "Cache-Control": "no-store",
+                    "X-Content-Type-Options": "nosniff",
+                    "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+                    "font-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'",
+                    "Referrer-Policy": "no-referrer",
+                },
+            )
+
+        api.mount("/assets", StaticFiles(directory=web / "assets"), name="assets")
 
     # Mount last: the official SDK owns /mcp and its protocol lifecycle.
     api.mount("/", mcp.streamable_http_app())
