@@ -1,0 +1,407 @@
+{
+  "session_start": {
+    "additionalProperties": false,
+    "properties": {
+      "schema_version": {
+        "const": 1,
+        "default": 1,
+        "title": "Schema Version",
+        "type": "integer"
+      },
+      "project_id": {
+        "format": "uuid",
+        "title": "Project Id",
+        "type": "string"
+      },
+      "external_session_id": {
+        "maxLength": 200,
+        "minLength": 1,
+        "title": "External Session Id",
+        "type": "string"
+      },
+      "task_key": {
+        "anyOf": [
+          {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Task Key"
+      },
+      "parent_session_id": {
+        "anyOf": [
+          {
+            "format": "uuid",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Parent Session Id"
+      }
+    },
+    "required": [
+      "project_id",
+      "external_session_id"
+    ],
+    "title": "SessionStart",
+    "type": "object"
+  },
+  "event_append": {
+    "additionalProperties": false,
+    "properties": {
+      "schema_version": {
+        "const": 1,
+        "default": 1,
+        "title": "Schema Version",
+        "type": "integer"
+      },
+      "session_id": {
+        "format": "uuid",
+        "title": "Session Id",
+        "type": "string"
+      },
+      "source_event_id": {
+        "maxLength": 200,
+        "minLength": 1,
+        "title": "Source Event Id",
+        "type": "string"
+      },
+      "event_type": {
+        "enum": [
+          "message",
+          "tool_result",
+          "session_start",
+          "turn_end",
+          "session_end"
+        ],
+        "title": "Event Type",
+        "type": "string"
+      },
+      "occurred_at": {
+        "format": "date-time",
+        "title": "Occurred At",
+        "type": "string"
+      },
+      "payload": {
+        "additionalProperties": true,
+        "title": "Payload",
+        "type": "object"
+      }
+    },
+    "required": [
+      "session_id",
+      "source_event_id",
+      "event_type",
+      "occurred_at",
+      "payload"
+    ],
+    "title": "EventAppend",
+    "type": "object"
+  },
+  "decision_record": {
+    "additionalProperties": false,
+    "properties": {
+      "schema_version": {
+        "const": 1,
+        "default": 1,
+        "title": "Schema Version",
+        "type": "integer"
+      },
+      "session_id": {
+        "format": "uuid",
+        "title": "Session Id",
+        "type": "string"
+      },
+      "statement": {
+        "maxLength": 12000,
+        "minLength": 1,
+        "title": "Statement",
+        "type": "string"
+      },
+      "rationale": {
+        "default": "",
+        "maxLength": 12000,
+        "title": "Rationale",
+        "type": "string"
+      },
+      "source_ids": {
+        "items": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "maxItems": 100,
+        "title": "Source Ids",
+        "type": "array"
+      },
+      "idempotency_key": {
+        "maxLength": 200,
+        "minLength": 1,
+        "title": "Idempotency Key",
+        "type": "string"
+      },
+      "supersedes_id": {
+        "anyOf": [
+          {
+            "format": "uuid",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Supersedes Id"
+      },
+      "expected_version": {
+        "anyOf": [
+          {
+            "minimum": 1,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Expected Version"
+      }
+    },
+    "required": [
+      "session_id",
+      "statement",
+      "idempotency_key"
+    ],
+    "title": "DecisionRecord",
+    "type": "object"
+  },
+  "session_checkpoint": {
+    "additionalProperties": false,
+    "properties": {
+      "schema_version": {
+        "const": 1,
+        "default": 1,
+        "title": "Schema Version",
+        "type": "integer"
+      },
+      "session_id": {
+        "format": "uuid",
+        "title": "Session Id",
+        "type": "string"
+      },
+      "summary": {
+        "maxLength": 12000,
+        "minLength": 1,
+        "title": "Summary",
+        "type": "string"
+      },
+      "open_items": {
+        "items": {
+          "maxLength": 2000,
+          "type": "string"
+        },
+        "maxItems": 30,
+        "title": "Open Items",
+        "type": "array"
+      },
+      "next_action": {
+        "default": "",
+        "maxLength": 2000,
+        "title": "Next Action",
+        "type": "string"
+      },
+      "last_event_id": {
+        "anyOf": [
+          {
+            "format": "uuid",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Last Event Id"
+      },
+      "idempotency_key": {
+        "maxLength": 200,
+        "minLength": 1,
+        "title": "Idempotency Key",
+        "type": "string"
+      }
+    },
+    "required": [
+      "session_id",
+      "summary",
+      "idempotency_key"
+    ],
+    "title": "SessionCheckpoint",
+    "type": "object"
+  },
+  "memory_search": {
+    "additionalProperties": false,
+    "properties": {
+      "schema_version": {
+        "const": 1,
+        "default": 1,
+        "title": "Schema Version",
+        "type": "integer"
+      },
+      "project_id": {
+        "format": "uuid",
+        "title": "Project Id",
+        "type": "string"
+      },
+      "query": {
+        "default": "",
+        "maxLength": 1000,
+        "title": "Query",
+        "type": "string"
+      },
+      "task_key": {
+        "anyOf": [
+          {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Task Key"
+      },
+      "include_history": {
+        "default": false,
+        "title": "Include History",
+        "type": "boolean"
+      },
+      "limit": {
+        "default": 20,
+        "maximum": 100,
+        "minimum": 1,
+        "title": "Limit",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "project_id"
+    ],
+    "title": "MemorySearch",
+    "type": "object"
+  },
+  "context_get": {
+    "additionalProperties": false,
+    "properties": {
+      "schema_version": {
+        "const": 1,
+        "default": 1,
+        "title": "Schema Version",
+        "type": "integer"
+      },
+      "project_id": {
+        "format": "uuid",
+        "title": "Project Id",
+        "type": "string"
+      },
+      "task_key": {
+        "anyOf": [
+          {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Task Key"
+      },
+      "query": {
+        "default": "",
+        "maxLength": 1000,
+        "title": "Query",
+        "type": "string"
+      },
+      "token_budget": {
+        "default": 3000,
+        "maximum": 8000,
+        "minimum": 256,
+        "title": "Token Budget",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "project_id"
+    ],
+    "title": "ContextGet",
+    "type": "object"
+  },
+  "memory_get": {
+    "additionalProperties": false,
+    "properties": {
+      "schema_version": {
+        "const": 1,
+        "default": 1,
+        "title": "Schema Version",
+        "type": "integer"
+      },
+      "memory_id": {
+        "format": "uuid",
+        "title": "Memory Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "memory_id"
+    ],
+    "title": "MemoryGet",
+    "type": "object"
+  },
+  "session_link": {
+    "additionalProperties": false,
+    "properties": {
+      "schema_version": {
+        "const": 1,
+        "default": 1,
+        "title": "Schema Version",
+        "type": "integer"
+      },
+      "source_session_id": {
+        "format": "uuid",
+        "title": "Source Session Id",
+        "type": "string"
+      },
+      "target_session_id": {
+        "format": "uuid",
+        "title": "Target Session Id",
+        "type": "string"
+      },
+      "relation_type": {
+        "enum": [
+          "continues",
+          "branches_from",
+          "references"
+        ],
+        "title": "Relation Type",
+        "type": "string"
+      }
+    },
+    "required": [
+      "source_session_id",
+      "target_session_id",
+      "relation_type"
+    ],
+    "title": "SessionLink",
+    "type": "object"
+  }
+}

@@ -1,0 +1,36 @@
+name: checks
+on: [push, pull_request]
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: memory
+          POSTGRES_PASSWORD: ci-only-not-a-production-secret
+          POSTGRES_DB: memory_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U memory -d memory_test"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      MEMORY_TEST_DATABASE_URL: postgresql://memory:ci-only-not-a-production-secret@127.0.0.1:5432/memory_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.3"
+          python-version: "3.12"
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest -q
+      - run: docker build -t shared-agent-memory:test .
+      - name: Compose smoke test
+        run: |
+          python3 scripts/configure.py
+          docker compose up --build -d --wait
+          curl --fail http://127.0.0.1:8765/health
+      - if: always()
+        run: docker compose down

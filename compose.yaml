@@ -1,0 +1,49 @@
+name: shared-agent-memory
+services:
+  db:
+    image: ${MEMORY_DB_IMAGE:-pgvector/pgvector:pg17}
+    environment:
+      POSTGRES_DB: memory
+      POSTGRES_USER: memory
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run python3 scripts/configure.py first}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U memory -d memory"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  migrate:
+    build:
+      context: .
+      args:
+        PYTHON_IMAGE: ${MEMORY_PYTHON_IMAGE:-python:3.12-slim}
+    command: [alembic, upgrade, head]
+    environment:
+      MEMORY_DATABASE_URL: postgresql://memory:${POSTGRES_PASSWORD}@db:5432/memory
+    depends_on:
+      db:
+        condition: service_healthy
+  api:
+    build:
+      context: .
+      args:
+        PYTHON_IMAGE: ${MEMORY_PYTHON_IMAGE:-python:3.12-slim}
+    command: [uvicorn, shared_memory.app:app, --host, 0.0.0.0, --port, "8765"]
+    environment:
+      MEMORY_DATABASE_URL: postgresql://memory:${POSTGRES_PASSWORD}@db:5432/memory
+      MEMORY_ALLOWED_HOSTS: ${MEMORY_ALLOWED_HOSTS:-["127.0.0.1:*","localhost:*"]}
+    ports:
+      - "127.0.0.1:${MEMORY_PORT:-8765}:8765"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+volumes:
+  postgres-data:
