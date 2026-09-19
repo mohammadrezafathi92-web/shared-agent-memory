@@ -33,19 +33,54 @@ from .service import DomainError, Store
 current_token = contextvars.ContextVar("memory_token", default="")
 
 
+def host_allowed(value, patterns):
+    """Mirror the MCP SDK's own Host/Origin allowlist matching (exact string, or "host:*" for any port)."""
+    if not value:
+        return False
+    host = value.partition(":")[0]
+    for pattern in patterns:
+        if pattern.endswith(":*"):
+            if host == pattern[:-2]:
+                return True
+        elif value == pattern:
+            return True
+    return False
+
+
 class BoundaryMiddleware:
     def __init__(self, app, store, settings):
         self.app, self.store, self.settings = app, store, settings
 
     async def __call__(self, scope, receive, send):
-        if (
-            scope["type"] != "http"
-            or scope["path"] in ("/health", "/")
-            or scope["path"].startswith("/assets/")
-        ):
+        if scope["type"] != "http":
             return await self.app(scope, receive, send)
         request_id = str(uuid4())
         headers = dict(scope["headers"])
+        # DNS-rebinding protection covers the whole app, not just the mounted MCP sub-app:
+        # the official SDK's own Host/Origin allowlist only guards its /mcp routes.
+        host_header = headers.get(b"host", b"").decode("latin1")
+        if not host_allowed(host_header, self.settings.allowed_hosts):
+            return await JSONResponse(
+                {"error": {"code": "INVALID_HOST", "request_id": request_id, "retryable": False}},
+                status_code=421,
+            )(scope, receive, send)
+        origin_header = headers.get(b"origin")
+        if origin_header is not None:
+            origin_value = origin_header.decode("latin1")
+            scheme, sep, origin_host = origin_value.partition("://")
+            if not sep or not host_allowed(origin_host, self.settings.allowed_hosts):
+                return await JSONResponse(
+                    {
+                        "error": {
+                            "code": "INVALID_ORIGIN",
+                            "request_id": request_id,
+                            "retryable": False,
+                        }
+                    },
+                    status_code=403,
+                )(scope, receive, send)
+        if scope["path"] in ("/health", "/") or scope["path"].startswith("/assets/"):
+            return await self.app(scope, receive, send)
         authorization = headers.get(b"authorization", b"").decode("latin1")
         token = authorization[7:] if authorization.lower().startswith("bearer ") else ""
 

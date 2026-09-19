@@ -154,3 +154,31 @@ def test_manual_deployment_is_not_overwritten(tmp_path):
     with pytest.raises(installer.InstallError, match="manual"):
         installer.install(tmp_path, config)
     assert (tmp_path / ".env").read_text() == "POSTGRES_PASSWORD=existing\n"
+
+
+def test_installer_lan_mode_requires_private_non_loopback_bind_host():
+    for bad in (
+        {"mode": "lan", "bind_host": "127.0.0.1"},
+        {"mode": "lan", "bind_host": "8.8.8.8"},
+        {"mode": "lan", "bind_host": "not-an-ip"},
+        {"mode": "lan"},
+    ):
+        with pytest.raises(installer.InstallError):
+            installer.validated(answers(**bad))
+    config = installer.validated(answers(mode="lan", bind_host="192.168.1.50"))
+    assert config["bind_host"] == "192.168.1.50"
+
+
+def test_installer_lan_mode_publishes_on_the_lan_address(tmp_path):
+    (tmp_path / ".install").mkdir(mode=0o700)
+    state = dict(
+        config=installer.validated(answers(mode="lan", bind_host="192.168.1.50", port=9000)),
+        database_password="a" * 48,
+        compose_project="sam-lan-test",
+    )
+    command = installer.write_runtime(tmp_path, state, ["docker"])
+    override = json.loads((tmp_path / ".install/lan.json").read_text())
+    assert override["services"]["api"]["ports"] == ["192.168.1.50:9000:8765"]
+    assert str(tmp_path / ".install/lan.json") in command
+    env = (tmp_path / ".install/runtime.env").read_text()
+    assert "192.168.1.50:9000" in env

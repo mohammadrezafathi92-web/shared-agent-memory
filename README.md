@@ -14,7 +14,7 @@ Run in a terminal on your Ubuntu server:
 curl -fsSL https://raw.githubusercontent.com/mohammadrezafathi92-web/shared-agent-memory/main/install.sh | bash
 ```
 
-The Persian/English wizard asks for the install directory, owner, workspace, project, port and local/HTTPS access. It can install missing prerequisites, builds the services, migrates PostgreSQL, creates the first account/token and verifies the dashboard. Interrupted installs resume with the same credentials and data. [Full installer guide](docs/installation.md) covers DNS/HTTPS, mirrors, private credentials, unattended answers and service management.
+The Persian/English wizard asks for the install directory, owner, workspace, project, port and local/LAN/HTTPS access. It can install missing prerequisites, builds the services, migrates PostgreSQL, creates the first account/token and verifies the dashboard. Interrupted installs resume with the same credentials and data. [Full installer guide](docs/installation.md) covers DNS/HTTPS, mirrors, private credentials, unattended answers and service management.
 
 Already cloned? Run `bash install.sh`. Use a fresh directory: existing manual deployments are not overwritten. This is a developer preview; the installer does not add missing product features or production certification.
 

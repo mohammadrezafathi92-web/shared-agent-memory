@@ -4,6 +4,7 @@
 import argparse
 import errno
 import fcntl
+import ipaddress
 import json
 import os
 import re
@@ -100,6 +101,7 @@ def validated(raw):
         "port",
         "mode",
         "domain",
+        "bind_host",
         "install_docker",
         "use_sudo",
         "accept",
@@ -116,6 +118,7 @@ def validated(raw):
         port=8765,
         mode="local",
         domain="",
+        bind_host="",
         install_docker=False,
         use_sudo=False,
         accept=False,
@@ -144,8 +147,8 @@ def validated(raw):
         or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email)
     ):
         raise InstallError("Enter a valid administrator email.")
-    if config["language"] not in ("en", "fa") or config["mode"] not in ("local", "https"):
-        raise InstallError("Language must be fa/en and access mode local/https.")
+    if config["language"] not in ("en", "fa") or config["mode"] not in ("local", "lan", "https"):
+        raise InstallError("Language must be fa/en and access mode local/lan/https.")
     try:
         config["port"] = int(config["port"])
     except (TypeError, ValueError):
@@ -172,6 +175,19 @@ def validated(raw):
                 "Enter a public DNS name without scheme, path or port (e.g. memory.example.com)."
             )
         config["domain"] = domain
+    elif config["mode"] == "lan":
+        try:
+            parsed_bind_host = ipaddress.ip_address(config.get("bind_host", ""))
+        except ValueError:
+            raise InstallError(
+                "Enter the server's own LAN IP address for lan mode (e.g. 192.168.1.50)."
+            ) from None
+        if parsed_bind_host.is_loopback or not parsed_bind_host.is_private:
+            raise InstallError(
+                "lan mode requires a private network address, not loopback or a public IP; "
+                "use https mode to publish on the internet."
+            )
+        config["bind_host"] = str(parsed_bind_host)
     for key in ("db_image", "python_image", "node_image", "caddy_image"):
         if not isinstance(config[key], str) or not re.fullmatch(
             r"[A-Za-z0-9][A-Za-z0-9._/@:-]{1,240}", config[key]
@@ -188,7 +204,7 @@ def collect():
             "email": ask("Administrator email", "ایمیل مدیر"),
             "project": ask("First project name", "نام پروژه اولیه", "Main project"),
             "port": ask("Local application port", "پورت محلی برنامه", "8765"),
-            "mode": ask("Access: local or https", "دسترسی: local یا https", "local"),
+            "mode": ask("Access: local, lan or https", "دسترسی: local، lan یا https", "local"),
         }
         registry = ask(
             "Image registry: dockerhub or ecr", "مخزن ایمیج: dockerhub یا ecr", "dockerhub"
@@ -211,6 +227,14 @@ def collect():
                 )
             )
             raw["domain"] = ask("Public domain", "دامنه عمومی")
+        elif raw["mode"] == "lan":
+            print(
+                say(
+                    "Other devices on the same network will reach this over plain HTTP (no encryption).",
+                    "دستگاه‌های دیگر همین شبکه با HTTP ساده (بدون رمزنگاری) بهش وصل می‌شن.",
+                )
+            )
+            raw["bind_host"] = ask("Server's own LAN IP address", "آی‌پی داخلی خودِ سرور")
         try:
             return validated(raw)
         except InstallError as exc:
@@ -265,6 +289,8 @@ def env_content(state):
     hosts = ["127.0.0.1:*", "localhost:*"]
     if c["mode"] == "https":
         hosts += [c["domain"], c["domain"] + ":443"]
+    elif c["mode"] == "lan":
+        hosts += [f"{c['bind_host']}:{c['port']}"]
     return (
         f"POSTGRES_PASSWORD={state['database_password']}\nMEMORY_PORT={c['port']}\n"
         f"MEMORY_ALLOWED_HOSTS='{json.dumps(hosts)}'\nMEMORY_DB_IMAGE={c['db_image']}\n"
@@ -286,6 +312,8 @@ def compose_command(root, state, docker):
     ]
     if state["config"]["mode"] == "https":
         command += ["-f", str(root / ".install/https.json")]
+    elif state["config"]["mode"] == "lan":
+        command += ["-f", str(root / ".install/lan.json")]
     return command
 
 
@@ -323,6 +351,13 @@ def write_runtime(root, state, docker):
             "volumes": {"caddy-data": {}, "caddy-config": {}},
         }
         private_write(directory / "https.json", json.dumps(override, indent=2))
+    elif state["config"]["mode"] == "lan":
+        override = {
+            "services": {
+                "api": {"ports": [f"{state['config']['bind_host']}:{state['config']['port']}:8765"]}
+            }
+        }
+        private_write(directory / "lan.json", json.dumps(override, indent=2))
     command = compose_command(root, state, docker)
     private_write(
         directory / "manage",
@@ -340,6 +375,8 @@ def check_ports(config):
     ports = [("127.0.0.1", config["port"])]
     if config["mode"] == "https":
         ports += [("0.0.0.0", 80), ("0.0.0.0", 443)]
+    elif config["mode"] == "lan":
+        ports.append((config["bind_host"], config["port"]))
     for host, port in ports:
         with socket.socket() as sock:
             try:
@@ -415,7 +452,15 @@ def install(root, config_file=None):
                 json.dumps(
                     {
                         key: config[key]
-                        for key in ("workspace", "email", "project", "port", "mode", "domain")
+                        for key in (
+                            "workspace",
+                            "email",
+                            "project",
+                            "port",
+                            "mode",
+                            "domain",
+                            "bind_host",
+                        )
                     },
                     ensure_ascii=False,
                     indent=2,
@@ -466,7 +511,12 @@ def install(root, config_file=None):
         identity = verify_http(base + "/api/v1/me", state["token"], attempts=1)
         if identity.get("connection_id") != result["connection_id"]:
             raise InstallError("HTTP identity does not match this installation.")
-        url = "https://" + config["domain"] if config["mode"] == "https" else base
+        if config["mode"] == "https":
+            url = "https://" + config["domain"]
+        elif config["mode"] == "lan":
+            url = f"http://{config['bind_host']}:{config['port']}"
+        else:
+            url = base
         credentials = dict(
             result,
             email=config["email"],

@@ -60,3 +60,27 @@ The interface is a same-origin static React app rather than the earlier proposed
 ## Interactive installer
 
 Added a Bash bootstrap and standard-library Python wizard, isolated Compose project/volumes, optional Caddy HTTPS, private saved configuration, transactional initial provisioning and non-destructive resume. The regression suite now contains **24 passing tests**. An actual local container installation and replay verifies dashboard access, owner identity, no duplicate accounts, retained memory and private credential files. CI also drives interactive terminal prompts on Ubuntu with its existing Docker installation. Blank-VM apt installation and real public DNS/certificate issuance are not covered by this smoke test.
+
+## Host/Origin allowlist now covers the whole app
+
+`MEMORY_ALLOWED_HOSTS` previously only protected the `/mcp` endpoint: the official MCP SDK's
+DNS-rebinding check runs inside its own mounted sub-app and never saw requests to `/api/v1/*`,
+`/health`, `/` or `/assets/*`. `BoundaryMiddleware` now validates the `Host` header (and `Origin`,
+when a browser sends one) against the same allowlist for every request before anything else runs,
+mirroring the SDK's own exact-string/`"host:*"` matching. Verified locally: a pure unit test for
+the matching function (`test_host_allowed_matching`), plus an integration test against a running
+app confirming an unrecognized `Host` gets `421` and an unrecognized `Origin` gets `403` on both
+the dashboard shell and the REST API (`test_boundary_rejects_unknown_host_and_origin`) — the
+latter needs the project's PostgreSQL test database and was not run in this environment; it runs
+under the same `uv run pytest -q` CI already exercises.
+
+## LAN access mode
+
+Added a third installer access mode, `lan`, alongside `local` and `https`: the API additionally
+binds to an operator-supplied LAN IP address (validated as private, non-loopback) over plain HTTP,
+and that address is added to `MEMORY_ALLOWED_HOSTS`. Config validation and the generated Compose
+override (`.install/lan.json`) are covered by local unit tests
+(`test_installer_lan_mode_requires_private_non_loopback_bind_host`,
+`test_installer_lan_mode_publishes_on_the_lan_address`); an actual container install in `lan` mode,
+reached from a second device, was **not** re-run through `scripts/smoke_install.py` in this change
+— only exercised manually once against a real server during development.

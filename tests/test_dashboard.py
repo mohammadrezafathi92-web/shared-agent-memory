@@ -103,3 +103,31 @@ def test_public_shell_does_not_expose_api(client):
     assert client.get(asset).status_code == 200
     assert client.get("/api/v1/projects").status_code == 401
     assert client.get("/api/v1/me").status_code == 401
+
+
+def test_host_allowed_matching():
+    from shared_memory.app import host_allowed
+
+    assert host_allowed("127.0.0.1:8765", ["127.0.0.1:*", "localhost:*"])
+    assert host_allowed("localhost:9999", ["127.0.0.1:*", "localhost:*"])
+    assert host_allowed("testserver", ["testserver"])
+    assert not host_allowed("evil.example.com", ["127.0.0.1:*", "localhost:*"])
+    assert not host_allowed("", ["testserver"])
+    # A bare pattern (no ":*") only matches a bare Host header, never an arbitrary port on it.
+    assert host_allowed("memory.example.com:443", ["memory.example.com", "memory.example.com:443"])
+    assert not host_allowed(
+        "memory.example.com:81", ["memory.example.com", "memory.example.com:443"]
+    )
+
+
+def test_boundary_rejects_unknown_host_and_origin(client):
+    # The Host/Origin allowlist must cover the whole app, not just the /mcp sub-app the
+    # MCP SDK itself protects: a client rebinding DNS to this server should still be refused.
+    assert client.get("/health", headers={"host": "evil.example.com"}).status_code == 421
+    assert client.get("/", headers={"host": "evil.example.com"}).status_code == 421
+    assert client.get("/api/v1/me", headers={"host": "evil.example.com"}).status_code == 421
+    assert (
+        client.get("/api/v1/me", headers={"origin": "http://evil.example.com"}).status_code == 403
+    )
+    assert client.get("/health").status_code == 200
+    assert client.get("/api/v1/me").status_code == 401

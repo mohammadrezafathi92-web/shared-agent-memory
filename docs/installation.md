@@ -16,9 +16,9 @@ The downloaded script clones the public repository, or resumes a matching existi
 2. Language (`fa` / `en`).
 3. Workspace, administrator email, initial project.
 4. Application port (default `8765`).
-5. Access mode: `local` or `https`.
+5. Access mode: `local`, `lan` or `https`.
 6. Container registry: `dockerhub` or `ecr`.
-7. Public domain, if HTTPS is selected.
+7. Public domain (`https`) or the server's own LAN IP address (`lan`), if selected.
 8. Confirm settings; install Docker/use sudo only if necessary.
 9. Optionally display the dashboard token after verified installation.
 
@@ -35,6 +35,13 @@ ssh -L 8765:127.0.0.1:8765 user@server
 ```
 
 Then open `http://127.0.0.1:8765/` and enter the dashboard token.
+
+**LAN:** the API additionally binds to the LAN IP address you gave, over plain HTTP (no
+encryption) — anyone on that network who can see the traffic can see the dashboard token and
+memory contents in transit. Use this only on a network you trust (office/home LAN), never on a
+network shared with untrusted devices. `MEMORY_ALLOWED_HOSTS` is updated to accept that address;
+127.0.0.1 keeps working too. There is no separate reachability check from the server itself —
+confirm from another device with `curl http://LAN_IP:PORT/health`.
 
 **HTTPS:** Caddy is added to the same isolated Compose project. It publishes ports 80 and 443, obtains/renews a certificate, and proxies to the internal API. Configure the domain's DNS to reach this server and permit inbound 80/443 at your network firewall before installation. Docker-published ports can bypass host UFW rules. The installer does not edit DNS/firewalls or replace an existing reverse proxy. It checks public HTTPS before reporting success; certificate/DNS failures leave state intact so the same command can resume. Internet access to certificate authorities is required. This does not add OAuth or certify ChatGPT cloud integration.
 
