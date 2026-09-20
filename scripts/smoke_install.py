@@ -6,6 +6,7 @@ import os
 import pty
 import select
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -17,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def wizard(root, port):
+def wizard(root, port, registry="dockerhub"):
     master, slave = pty.openpty()
     process = subprocess.Popen(
         [sys.executable, str(root / "scripts/install.py")],
@@ -34,15 +35,18 @@ def wizard(root, port):
             ("Administrator email", "installer@example.test"),
             ("First project name", "Pilot"),
             ("Local application port", str(port)),
-            ("Access: local or https", "local"),
-            ("Image registry: dockerhub or ecr", "dockerhub"),
+            ("Access:", "local"),
+            ("Image registry: dockerhub or ecr", registry),
             ("Start installation?", "y"),
             ("Show dashboard token", "n"),
         ]
     )
     expected = next(prompts)
     log, pending = "", ""
-    deadline = time.monotonic() + 900
+    # A stale prompt matcher must fail quickly instead of consuming the
+    # complete CI job timeout. Image pulls/builds are allowed separately by
+    # the installer's own command execution.
+    deadline = time.monotonic() + 600
     try:
         while time.monotonic() < deadline:
             if select.select([master], [], [], 1)[0]:
@@ -61,13 +65,22 @@ def wizard(root, port):
             elif process.poll() is not None:
                 break
         if process.poll() is None:
-            process.wait(timeout=10)
+            os.killpg(process.pid, signal.SIGTERM)
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait(timeout=10)
         if process.returncode or expected:
             raise RuntimeError("Wizard failed or did not complete prompts:\n" + log[-12000:])
     finally:
         if process.poll() is None:
-            process.terminate()
-            process.wait(timeout=10)
+            os.killpg(process.pid, signal.SIGTERM)
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait(timeout=10)
         os.close(master)
 
 
@@ -121,7 +134,8 @@ def main():
         manage = root / ".install/manage"
         try:
             if args.interactive:
-                wizard(root, port)
+                registry = "ecr" if args.db_image.startswith("public.ecr.aws/") else "dockerhub"
+                wizard(root, port, registry)
                 # Reuse exactly the saved answers for unattended recovery/replay.
                 answers.write_text(
                     json.dumps(json.loads((root / ".install/state.json").read_text())["config"])
