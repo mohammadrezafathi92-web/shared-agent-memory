@@ -61,6 +61,12 @@ test("real data, source inspection, language, context and logout", async ({
 test("create session, save decision and continue across sessions", async ({
   page,
 }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(Crypto.prototype, "randomUUID", {
+      configurable: true,
+      value: undefined,
+    });
+  });
   await login(page);
   await page.getByRole("button", { name: "سشن جدید", exact: true }).click();
   const name = "Browser session " + Date.now();
