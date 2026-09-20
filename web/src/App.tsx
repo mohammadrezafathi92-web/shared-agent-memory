@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type DependencyList,
+  type CSSProperties,
   type FormEvent,
   type ReactNode,
 } from "react";
@@ -13,10 +14,12 @@ import {
   ArrowUpRight,
   Blocks,
   BookOpen,
+  BrainCircuit,
   Check,
   ChevronDown,
   ChevronRight,
   Copy,
+  Cpu,
   Database,
   FileText,
   Folder,
@@ -27,8 +30,10 @@ import {
   LogOut,
   Menu,
   Network,
+  Orbit,
   Plus,
   RefreshCw,
+  Radio,
   Search,
   ShieldCheck,
   SlidersHorizontal,
@@ -474,10 +479,13 @@ export default function App() {
   if (!me)
     return (
       <div className="login-page">
+        <div className="ambient ambient-one" aria-hidden="true" />
+        <div className="ambient ambient-two" aria-hidden="true" />
         <header className="login-header">
           <div className="brand">
             <span className="brand-icon">
-              <Network size={24} />
+              <BrainCircuit size={24} />
+              <span className="brand-pulse" />
             </span>
             <span>
               Shared Memory<small>{t("selfHosted")}</small>
@@ -499,18 +507,23 @@ export default function App() {
             <h1>{t("loginTitle")}</h1>
             <p>{t("loginText")}</p>
             <div className="story-network" aria-hidden="true">
-              <span className="story-node">
-                <Terminal size={20} />
-                Claude Code
-              </span>
-              <span className="network-line" />
+              <div className="orbit orbit-one" />
+              <div className="orbit orbit-two" />
               <span className="story-hub">
-                <Network size={35} />
+                <BrainCircuit size={38} />
+                <span className="hub-core" />
               </span>
-              <span className="network-line" />
-              <span className="story-node">
-                <Terminal size={20} />
-                Codex
+              <span className="story-node node-anthropic">
+                <span className="node-signal" /> Anthropic
+              </span>
+              <span className="story-node node-openai">
+                <span className="node-signal" /> OpenAI
+              </span>
+              <span className="story-node node-codex">
+                <span className="node-signal" /> Codex
+              </span>
+              <span className="story-node node-hermes">
+                <span className="node-signal" /> Hermes
               </span>
             </div>
             <div className="story-points">
@@ -572,6 +585,8 @@ export default function App() {
     );
   return (
     <div className="app-shell">
+      <div className="ambient ambient-one" aria-hidden="true" />
+      <div className="ambient ambient-two" aria-hidden="true" />
       <a
         className="skip-link"
         href="#main-content"
@@ -585,7 +600,8 @@ export default function App() {
       <aside className={`sidebar ${mobile ? "open" : ""}`}>
         <a className="brand" href="#overview">
           <span className="brand-icon">
-            <Network size={24} />
+            <BrainCircuit size={24} />
+            <span className="brand-pulse" />
           </span>
           <span>
             Shared Memory<small>{t("selfHosted")}</small>
@@ -687,6 +703,10 @@ export default function App() {
               <span className="status-dot" />
               {t("keyword")}
             </Badge>
+            <span className="system-chip" aria-label="MCP online">
+              <Radio size={14} aria-hidden="true" />
+              MCP <bdi>ONLINE</bdi>
+            </span>
             <button
               className="language"
               onClick={() => setLang(lang === "fa" ? "en" : "fa")}
@@ -697,24 +717,33 @@ export default function App() {
         </header>
         <main id="main-content" tabIndex={-1} className="content">
           <div className="page-heading">
-            <div>
-              <p className="eyebrow">{project?.name || t("workspace")}</p>
-              <h1>{t(page)}</h1>
-              <p>
-                {t(
-                  page === "overview"
-                    ? "overviewText"
-                    : page === "sessions"
-                      ? "sessionText"
-                      : page === "memory"
-                        ? "memoryText"
-                        : page === "connections"
-                          ? "connectionsText"
-                          : page === "graph"
-                            ? "graphText"
-                            : "previewText",
-                )}
-              </p>
+            <div className="page-identity">
+              <span className="page-icon" aria-hidden="true">
+                {(() => {
+                  const Icon =
+                    navigation.find(([name]) => name === page)?.[1] || Layers;
+                  return <Icon size={22} />;
+                })()}
+              </span>
+              <div>
+                <p className="eyebrow">{project?.name || t("workspace")}</p>
+                <h1>{t(page)}</h1>
+                <p>
+                  {t(
+                    page === "overview"
+                      ? "overviewText"
+                      : page === "sessions"
+                        ? "sessionText"
+                        : page === "memory"
+                          ? "memoryText"
+                          : page === "connections"
+                            ? "connectionsText"
+                            : page === "graph"
+                              ? "graphText"
+                              : "previewText",
+                  )}
+                </p>
+              </div>
             </div>
             <div className="heading-actions">
               <button
@@ -904,15 +933,46 @@ function OverviewPage(p: Common) {
   ] as const;
   return (
     <>
+      <section className="neural-banner" aria-label={p.t("overview")}>
+        <div className="neural-copy">
+          <Badge tone="teal">
+            <span className="status-dot" /> LIVE MEMORY FABRIC
+          </Badge>
+          <h2>{p.t("overviewText")}</h2>
+          <p>{p.t("contextTrust")}</p>
+        </div>
+        <div className="neural-visual" aria-hidden="true">
+          <span className="visual-ring ring-a" />
+          <span className="visual-ring ring-b" />
+          <span className="visual-core">
+            <BrainCircuit size={33} />
+          </span>
+          <span className="visual-node node-a">
+            <Cpu size={14} />
+          </span>
+          <span className="visual-node node-b">
+            <Orbit size={14} />
+          </span>
+          <span className="visual-node node-c">
+            <Terminal size={14} />
+          </span>
+        </div>
+      </section>
       <div className="stats-grid">
-        {cards.map(([key, Icon]) => (
-          <div className="stat" key={key}>
+        {cards.map(([key, Icon], index) => (
+          <div
+            className={`stat stat-${key}`}
+            key={key}
+            style={{ "--index": index } as CSSProperties}
+          >
             <div className="stat-label">
               <span>{p.t(key)}</span>
               <Icon size={19} />
             </div>
             <strong>{data.stats[key].toLocaleString()}</strong>
-            <span className="stat-foot">{p.t("project")}</span>
+            <span className="stat-foot">
+              <span className="pulse-line" /> {p.t("project")}
+            </span>
           </div>
         ))}
       </div>
